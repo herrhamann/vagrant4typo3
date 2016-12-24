@@ -18,11 +18,12 @@ echo -e "\n--- Install base packages ---\n"
 apt-get -y install vim curl build-essential python-software-properties git > /dev/null 2>&1
 
 echo -e "\n--- Add some repos to update our distro ---\n"
-add-apt-repository ppa:ondrej/php5 > /dev/null 2>&1
+#add-apt-repository ppa:ondrej/php5 > /dev/null 2>&1
 add-apt-repository ppa:chris-lea/node.js > /dev/null 2>&1
 
 echo -e "\n--- Updating packages list ---\n"
 apt-get -qq update
+
 
 echo -e "\n--- Install MySQL specific packages and settings ---\n"
 echo "mysql-server mysql-server/root_password password $DBPASSWD" | debconf-set-selections
@@ -39,7 +40,28 @@ mysql -uroot -p$DBPASSWD -e "CREATE DATABASE $DBNAME"
 mysql -uroot -p$DBPASSWD -e "grant all privileges on $DBNAME.* to '$DBUSER'@'localhost' identified by '$DBPASSWD'"
 
 echo -e "\n--- Installing PHP-specific packages ---\n"
-apt-get -y install php5 apache2 libapache2-mod-php5 php5-curl php5-gd php5-mcrypt php5-mysql php-apc > /dev/null 2>&1
+apt-get -y install php5 apache2 libapache2-mod-php5 php5-curl php5-gd php5-mcrypt php5-mysql php-apc php5-dev php5-xdebug > /dev/null 2>&1
+
+echo -e "\n--- Setting up XDEBUG ---\n"
+cat > /etc/php5/mods-available/xdebug.ini <<EOF
+zend_extension=/usr/lib/php5/20121212/xdebug.so
+; Debugging aktivieren
+xdebug.default_enable=on
+; Remote debugging aktivieren
+xdebug.remote_enable = on
+; Schaltet Remote Debugging für alle Hosts an
+xdebug.remote_connect_back= on
+; Schaltet Remote Debugging per default an
+xdebug.remote_autostart=0
+; Datenverkehr zw. XDebug und IDE in ein logfile schreiben
+xdebug.remote_log=/tmp/xdebug.log
+; Remote host
+xdebug.remote_host=192.168.62.1
+; Port
+xdebug.remote_port=9000
+xdebug.max_nesting_level=400
+xdebug.idekey = PhpStorm
+EOF
 echo -e "\n--- Installing GraphicMagick---\n"
 apt-get -y install graphicsmagick
 
@@ -50,7 +72,7 @@ echo -e "\n--- Allowing Apache override to all ---\n"
 sed -i "s/AllowOverride None/AllowOverride All/g" /etc/apache2/apache2.conf
 
 echo -e "\n--- Setting document root ---\n"
-rm -rf /var/www/html
+#cd /var/www
 mkdir /var/www/html
 chown -R www-data:www-data /var/www/html
 usermod -aG www-data vagrant
@@ -88,10 +110,12 @@ a2enconf phpmyadmin > /dev/null 2>&1
 echo -e "\n--- Add environment variables to Apache ---\n"
 cat > /etc/apache2/sites-enabled/000-default.conf <<EOF
 <VirtualHost *:80>
+    ServerName local.dev
     DocumentRoot /var/www/html
     ServerAlias $LOCALDOMAIN
     ErrorLog \${APACHE_LOG_DIR}/error.log
     CustomLog \${APACHE_LOG_DIR}/access.log combined
+    DirectoryIndex index.php
     SetEnv APP_ENV $APPENV
     SetEnv DB_HOST $DBHOST
     SetEnv DB_NAME $DBNAME
@@ -101,27 +125,6 @@ cat > /etc/apache2/sites-enabled/000-default.conf <<EOF
 </VirtualHost>
 EOF
 
-echo -e "\n--- Setting up XDEBUG ---\n"
-cat > /tmp/xdebug <<EOF
-[xdebug]
-zend_extension=/usr/lib64/php/modules/xdebug.so
-xdebug.remote_enable = 1
-; Schaltet Remote Debugging für alle Hosts an
-xdebug.remote_connect_back=1
-; Schaltet Remote Debugging per default an
-xdebug.remote_autostart=1
-; Datenverkehr zw. XDebug und IDE in ein logfile schreiben
-;xdebug.remote_log=/tmp/xdebug.log
-;xdebug.remote_host=84.130.214.73
-; Port
-xdebug.remote_port=9000
-xdebug.max_nesting_level=400
-xdebug.default_enable=1
-xdebug.idekey = PhpStorm
-EOF
-
-cat /tmp/xdebug >> /etc/php5/apache2/php.ini
-rm /tmp/xdebug
 echo -e "\n--- Restarting Apache ---\n"
 service apache2 restart > /dev/null 2>&1
 
